@@ -40,6 +40,8 @@ app.use(function(err, req, res, next) {
 
 module.exports = app;
 */
+require('dotenv').config();
+
 const express = require('express')
 const app = express()
 const fs = require('fs')
@@ -47,18 +49,37 @@ const pgp = require('pg-promise')()
 
 app.use(express.json());
 
+// Connect to DB
 const connection = {
-  user: process.env.REACT_APP_PGUSER,
-  host: process.env.REACT_APP_PGHOST,
-  database: process.env.REACT_APP_PGDATABASE,
-  password: process.env.REACT_APP_PGPASSWORD,
-  port: process.env.REACT_APP_PGPORT
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT
 }
+
 const db = pgp(connection)
 
+app.get('/', function (req, res) {
+ return res.send('Starca Server');
+});
 
 app.get('/ping', function (req, res) {
  return res.send('pong');
+});
+
+
+app.get('/test', function (req, res) {
+  db.any('SELECT * FROM testuser')
+          .then(function (data){
+                console.log('Data', data);
+                res.send(data);
+                //res.end(data.toString());
+        })
+          .catch(function (error) {
+                console.log('Error', error);
+                res.end('Database query error' + error);
+        })
 });
 
 module.exports = app;
