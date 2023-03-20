@@ -4,7 +4,7 @@ const pool  = require("./db");
 const bodyParser = require('body-parser');
 const bcrypt = require("bcrypt");
 const session = require('express-session');
-
+const nodemailer = require('nodemailer');
 
 //Middleware
 // parse incoming requests
@@ -30,23 +30,21 @@ app.post('/register', async (req, res) => {
 
     try {
   
-        if (!email || !passwrd ) {
-        return res.status(400).send('Email, password are required.');
+        if (!email || !passwrd || !confirmPassword || !fname || !lname || !phnum) {
+        return res.status(400).send('All Fields are Required.');
         }
     
         if (passwrd !== confirmPassword) {
         return res.status(400).send('Passwords do not match.');
         }
 
-        // Check if a user with the given email already exists
-        const existingUserQuery = 'SELECT * FROM susers WHERE email = $1';
-        const existingUserResult = await pool.query(existingUserQuery, [email]);
-        const existingUser = existingUserResult.rows[0];
-
-        if (existingUser) {
-        return res.redirect('/register?error=Email address already in use');
+          // Check if the user already exists
+        const existingUser = await pool.query('SELECT * FROM susers WHERE email=$1', [email]);
+        if (existingUser.rows.length !== 0) {
+        res.status(400).send('User already exists');
+        return;
         }
-  
+
          // Hash the password using bcrypt
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(passwrd, salt);
@@ -56,9 +54,28 @@ app.post('/register', async (req, res) => {
         const values = [email, hashedPassword, fname, lname, phnum];
         const insertUserResult = await pool.query(insertQuery, values);
         
+        res.status(201).send('You have successfully registered!');
         
-        res.send('You have successfully registered!');
+          
+          // Send email notification
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: 'jaimeen3195sharma@gmail.com',
+              pass: 'etuhuwtomuinbjea',
+            },
+          });
+      
+          const mailOptions = {
+            from: 'jaimeen3195sharma@gmail.com',
+            to: email,
+            subject: 'Registration Notification',
+            text: 'This is starca Registration Portal, You have successfully registered.',
+          };
 
+          transporter.sendMail(mailOptions);
+          console.log('Notification email sent to ${email}');
+       
         //const userId = insertUserResult.rows[0].id;
         //req.session.userId = userId;
 
@@ -151,6 +168,10 @@ app.get('/profile', (req, res) => {
   });
   */
 
+
+
+
+  
 app.listen(3001,()=>{
     console.log("Running on 3001");
 });
