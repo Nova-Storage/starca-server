@@ -124,7 +124,7 @@ app.post('/login', async (req, res) => {
     }
   });
 
-  app.get('/boundary', async (req, res) => {
+  app.post('/boundary', async (req, res) => {
 
     const { state, zipCode } = req.body;
     
