@@ -134,7 +134,7 @@ app.post('/login', async (req, res) => {
         }
 
         let paths = []
-        let jsonFIle = require(`./stateZIPs/${state}.json`)
+        let jsonFIle = require(`./zipcodes/${state}.json`)
         const boundaries = jsonFile.features.find(element => element.properties.ZCTA5CE10 === `${zipCode}`)
         for (var i = 0; i < test2.geometry.coordinates[0].length; i++) {
           paths.push({
