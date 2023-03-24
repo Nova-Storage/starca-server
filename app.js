@@ -124,6 +124,33 @@ app.post('/login', async (req, res) => {
     }
   });
 
+  app.post('/boundary', async (req, res) => {
+
+    const { state, zipCode } = req.body;
+    
+    try {
+        if (!zipCode || !state) {
+          return res.status(400).send('Zip Code and state required.');
+        }
+
+        let paths = []
+        let jsonFIle = require(`./stateZIPs/${state}.json`)
+        const boundaries = jsonFile.features.find(element => element.properties.ZCTA5CE10 === `${zipCode}`)
+        for (var i = 0; i < test2.geometry.coordinates[0].length; i++) {
+          paths.push({
+            lat: boundaries.geometry.coordinates[0][i][1],
+            lng: boundaries.geometry.coordinates[0][i][0]
+          })
+        }
+
+        // Send back the array of all coordinates
+        res.send(paths);
+    } catch (err) {
+      console.error(err);
+      res.status(500).send('Error retrieving boundary.');
+    }
+  });
+
   
 /*
 app.get('/logout', (req, res) => {
