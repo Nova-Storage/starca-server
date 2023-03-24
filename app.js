@@ -24,6 +24,12 @@ const authenticateUser = (req, res, next) => {
   };
 */
 
+app.get('/', async (req, res) => {
+
+    res.send('Welcome to Starca Server')
+    
+  });
+
 app.post('/register', async (req, res) => {
 
     const { email, passwrd, confirmPassword, fname, lname, phnum } = req.body;
@@ -134,7 +140,7 @@ app.post('/login', async (req, res) => {
         }
 
         let paths = []
-        let jsonFIle = require(`./zipcodes/${state}.json`)
+        let jsonFile = require(`./zipcodes/${state}.json`)
         const boundaries = jsonFile.features.find(element => element.properties.ZCTA5CE10 === `${zipCode}`)
         for (var i = 0; i < test2.geometry.coordinates[0].length; i++) {
           paths.push({
