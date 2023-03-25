@@ -11,4 +11,3 @@
 
 
 ## Resources
-[Using certbot in AWS Elastic Beanstalk for obtaining SSL certificates](https://medium.com/edataconsulting/how-to-get-a-ssl-certificate-running-in-aws-elastic-beanstalk-using-certbot-6daa9baa3997)
