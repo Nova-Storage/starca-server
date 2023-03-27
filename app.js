@@ -5,12 +5,21 @@ const bodyParser = require('body-parser');
 const bcrypt = require("bcrypt");
 const session = require('express-session');
 const nodemailer = require('nodemailer');
+const cors = require('cors');
+
+//cors
+const corsOptions = {
+  origin: '*',
+  credentials: true,
+  optionSuccessStatus:200,
+}
 
 //Middleware
 // parse incoming requests
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
+app.use(cors(corsOptions))
 
 // define middleware to check if the user is authenticated
 
