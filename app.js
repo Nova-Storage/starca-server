@@ -138,6 +138,31 @@ app.post('/login', async (req, res) => {
     }
   });
 
+  app.post('/profile', (req, res) => {
+
+    const {email} = req.body;
+
+    pool.query('SELECT * FROM susers WHERE email = $1', [email], (err, result) => {
+
+        console.log(email); 
+
+        if (err) {
+        console.error(err);
+        res.status(500).send('Not connecting to the server');
+        return;
+      }
+
+      if (result.rows.length === 0) {
+        // No user found with the given email
+        res.status(404).send('User not found');
+        return;
+      }
+
+      // Render the profile page with the user data
+      res.json(result.rows[0]);
+    });
+  });
+
   app.post('/boundary', async (req, res) => {
 
     const { state, zipCode } = req.body;
