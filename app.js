@@ -142,7 +142,7 @@ app.post('/login', async (req, res) => {
 
     const {email} = req.body;
 
-    pool.query('SELECT * FROM susers WHERE email = $1', [email], (err, result) => {
+    pool.query('SELECT email, fname, lname, phnum FROM susers WHERE email = $1', [email], (err, result) => {
 
         console.log(email); 
 
