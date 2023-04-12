@@ -167,11 +167,11 @@ app.post('/login', async (req, res) => {
   });
 
 
-  app.post('/profile', (req, res) => {
+  app.post('/get-user-names', (req, res) => {
 
     const {email} = req.body;
 
-    pool.query('SELECT email, fname, lname, phnum FROM susers WHERE email = $1', [email], (err, result) => {
+    pool.query('SELECT email, ufname, ulname FROM susers WHERE email = $1', [email], (err, result) => {
 
         console.log(email); 
 
@@ -263,73 +263,73 @@ app.get('/logout',(req, res) => {
 
 app.get('/profile',async(req, res,next) => {
    
-  });
+});
   
-  app.post('/listing',upload.array('images',5), async (req, res) => {
- 
-    const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry} = req.body;
-    const images = req.files;
-    //const userId = req.user.id;
+app.post('/listing',upload.array('images',5), async (req, res) => {
 
-    try {
-      const insertListing = await pool.query(
-        'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,) RETURNING *',
-        [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry]
-      );
+  const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry} = req.body;
+  const images = req.files;
+  //const userId = req.user.id;
 
-      if (insertListing.rows.length > 0) {
-        const lid = insertListing.rows[0].id;
-        console.log(lid);
-      } else {
-        console.error('Failed to insert listing');
-        res.status(500).json({ message: 'Failed to insert listing' });
-      }
-     // const lid = insertListing.rows[0].id;
-    //  console.log(lid);
+  try {
+    const insertListing = await pool.query(
+      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,) RETURNING *',
+      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry]
+    );
 
-      const insertImages = images.map((image)=> {
-        
-        const imageQuery = 'INSERT INTO slistImages(listid, filename, filedata) VALUES ($1, $2, $3)';
-        const imageData = image.buffer;
-        const imageValues = [lid, image.filename, imageData];
-        
-        return {query: imageQuery , values: imageValues};
-
-      });
-
-      await Promise.all(imageImages.map((q) => pool.query(q.query, q.values)));
-
-      res.status(200).json({message: 'New Listing Created Successfully'}); 
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).json({ message: 'Server Error' });
+    if (insertListing.rows.length > 0) {
+      const lid = insertListing.rows[0].id;
+      console.log(lid);
+    } else {
+      console.error('Failed to insert listing');
+      res.status(500).json({ message: 'Failed to insert listing' });
     }
-  });
+    // const lid = insertListing.rows[0].id;
+  //  console.log(lid);
+
+    const insertImages = images.map((image)=> {
+      
+      const imageQuery = 'INSERT INTO slistImages(listid, filename, filedata) VALUES ($1, $2, $3)';
+      const imageData = image.buffer;
+      const imageValues = [lid, image.filename, imageData];
+      
+      return {query: imageQuery , values: imageValues};
+
+    });
+
+    await Promise.all(imageImages.map((q) => pool.query(q.query, q.values)));
+
+    res.status(200).json({message: 'New Listing Created Successfully'}); 
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
 
 
-  app.get('/glisting', async (req, res) => {
-    const id = req.params.id;
-  
-    try {
-      const query = `
-        SELECT s.*, li.filename, li.filedata
-        FROM slistings s
-        INNER JOIN slistImages li ON s.LID = li.listid
-        WHERE s.LID = $1;
-      `;
-      const values = [id];
-  
-      const result = await pool.query(query, values);
-  
-      if (result.rowCount === 0) {
-        return res.status(404).json({ message: 'Listing not found' });
-      }
-  
-      res.status(200).json(result.rows[0]);
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).json({ message: 'Server Error' });
+app.get('/glisting', async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const query = `
+      SELECT s.*, li.filename, li.filedata
+      FROM slistings s
+      INNER JOIN slistImages li ON s.LID = li.listid
+      WHERE s.LID = $1;
+    `;
+    const values = [id];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Listing not found' });
     }
-  });
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
   
 module.exports = app;
