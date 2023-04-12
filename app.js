@@ -266,15 +266,15 @@ app.get('/profile',async(req, res,next) => {
 });
   
 app.post('/listing',upload.array('images',5), async (req, res) => {
-
-  const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry} = req.body;
+ 
+  const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
   const images = req.files;
   //const userId = req.user.id;
 
   try {
     const insertListing = await pool.query(
-      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,) RETURNING *',
-      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry]
+      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *',
+      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess]
     );
 
     if (insertListing.rows.length > 0) {
@@ -284,7 +284,7 @@ app.post('/listing',upload.array('images',5), async (req, res) => {
       console.error('Failed to insert listing');
       res.status(500).json({ message: 'Failed to insert listing' });
     }
-    // const lid = insertListing.rows[0].id;
+   // const lid = insertListing.rows[0].id;
   //  console.log(lid);
 
     const insertImages = images.map((image)=> {
