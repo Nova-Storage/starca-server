@@ -343,10 +343,35 @@ app.get('/get-listings', async (req, res) => {
     const result = await pool.query(query);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'No listings not found' });
+      return res.status(404).json({ message: 'No listings found' });
     }
 
-    res.status(200).json(result);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+app.get('/get-my-listings', async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const query = `
+      SELECT *
+      FROM slistings
+      WHERE luserid = $1
+    `;
+
+    values = [id];
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'No listings found' });
+    }
+
+    res.status(200).json(result.rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error' });
