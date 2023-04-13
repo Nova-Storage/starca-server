@@ -331,5 +331,26 @@ app.get('/glisting', async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 });
+
+app.get('/get-listings', async (req, res) => {
+
+  try {
+    const query = `
+      SELECT *
+      FROM slistings
+    `;
+
+    const result = await pool.query(query);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'No listings not found' });
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
   
 module.exports = app;
