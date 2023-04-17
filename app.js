@@ -427,5 +427,65 @@ app.get('/get-my-listings', async (req, res) => {
     res.status(500).json({ message: 'Server Error' });
   }
 });
+
+app.post('forgotPassword', async (req, res) => {
+  var randomstring = require("randomstring");
+  const { email } = req.body
+  var userName = ''
+
+  pool.query('SELECT email, ufname FROM susers WHERE email = $1', [email], (err, result) => {
+    userName = result.rows[0].ufname
+
+    if (err) {
+      console.error(err);
+      res.status(500).send('Error querying server.');
+    return;
+  }
+
+  // No user found with the given email
+  if (result.rows.length === 0) {
+    res.status(400).send('An account with that email does not exist.');
+    return;
+  }});
+
+  // Generate a resetPasswordToken 
+  const token = randomstring.generate({
+    length:200,
+  })
+
+  // Set resetPasswordToken to token
+  // Set resetTokenExpire set to Date.now() (it is set to time since creation)
+  // Save in database
+  try {
+    const query = `
+      update susers
+      set uResPassToken = ${token}
+      where email = ${email}
+      `
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
+
+    // Send email notification
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'jaimeen3195sharma@gmail.com',
+        pass: 'etuhuwtomuinbjea',
+      },
+    });
+
+    const mailOptions = {
+      from: 'jaimeen3195sharma@gmail.com',
+      to: email,
+      subject: 'Starca Reset Password',
+      html: `Hello ${userName}, <br /><br /> <p>Please click this <a href="https://starcaserver.com/resetPassword/?token=${token}&email=${email}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
+    };
+
+    transporter.sendMail(mailOptions);
+
+    return res.status(200).send(`An email with a link to reset password was sent to ${email}!`)
+})
   
 module.exports = app;
