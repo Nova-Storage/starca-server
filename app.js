@@ -428,7 +428,7 @@ app.get('/get-my-listings', async (req, res) => {
   }
 });
 
-app.post('forgotPassword', async (req, res) => {
+app.post('/forgotPassword', async (req, res) => {
   var randomstring = require("randomstring");
   const { email } = req.body
   var userName = ''
