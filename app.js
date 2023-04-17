@@ -29,7 +29,7 @@ app.use(cors(corsOptions))
 
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(bodyParser.urlencoded({ extended: false }));
+
 
 app.use(session({
   secret: 'mysecret',
@@ -37,9 +37,24 @@ app.use(session({
   saveUninitialized: false
 }));
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage })/*.array('images',5)*/;
 
+/*
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    return cb(null, "./uploads");
+  },
+  filename: function (req, file, cb) {
+    return cb(null, "${Date.now()}-${file.type}");
+  },
+});
+*/
+const upload = multer({
+   dest: './uploads',
+ });
+
+
+
+app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
   res.send('Welcome to Starca Server')
@@ -122,7 +137,7 @@ app.post('/login', async (req, res) => {
         const query = 'SELECT * FROM susers WHERE email = $1';
         const result = await pool.query(query, [email]);
         const user = result.rows[0];
-        const userId = user.id;
+        let userId = user.id;
         req.session.userId = userId;
 
 
@@ -265,12 +280,15 @@ app.get('/profile',async(req, res,next) => {
    
 });
   
-app.post('/listing',upload.array('images',5), async (req, res) => {
+app.post('/listing',upload.array("image",5), async (req, res, next) => {
+
+
+   
  
   const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
-  const images = req.files;
+  //const image = req.files;
   //const userId = req.user.id;
-
+ 
   try {
     const insertListing = await pool.query(
       'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *',
@@ -284,22 +302,54 @@ app.post('/listing',upload.array('images',5), async (req, res) => {
       console.error('Failed to insert listing');
       res.status(500).json({ message: 'Failed to insert listing' });
     }
+       
+    var response = ''; 
+    for(var i=0;i<req.files.length;i++){
+        response += `<img src="${req.files[i].path}" /><br>`
+        //console.log(req.files[i].path);
+
+        pool.query('SELECT lid FROM slistings WHERE userid = $1', [userId], (err, result) => {
+  
+          if (err) {
+          console.error(err);
+          res.status(500).send('Not connecting to the server');
+          return;
+        }
+  
+        if (result.rows.length === 0) {
+          res.status(404).send('list not found');
+          return;
+        }
+        let listid = result.rows[0];
+        
+      });
+      const listid = 1;
+        pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid,req.files[i].path], function(err, result) {
+          //done();
+          if(err) {
+              return console.error('error running query', err);
+          }
+          console.log('Image inserted into the database');
+      });
+    }
+
    // const lid = insertListing.rows[0].id;
   //  console.log(lid);
-
+/*
     const insertImages = images.map((image)=> {
       
-      const imageQuery = 'INSERT INTO slistImages(listid, filename, filedata) VALUES ($1, $2, $3)';
+      const imageQuery = 'INSERT INTO slistImages( filename, filedata) VALUES ($1, $2)';
       const imageData = image.buffer;
-      const imageValues = [lid, image.filename, imageData];
+      const imageValues = [ image.filename, imageData];
       
       return {query: imageQuery , values: imageValues};
 
     });
 
-    await Promise.all(imageImages.map((q) => pool.query(q.query, q.values)));
+    await Promise.all(images.map((q) => pool.query(q.query, q.values)));
 
     res.status(200).json({message: 'New Listing Created Successfully'}); 
+    */
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error' });
