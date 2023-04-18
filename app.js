@@ -439,12 +439,16 @@ app.post('/forgotPassword', async (req, res) => {
   const currentTime = new Date()
   const tokenExp = new Date(currentTime.getTime() + (60 * 60 * 1000))
   pool.query(`
-    UPDATE susers 
-    SET uResPassToken = $1, urespasstokenexp = $3
-    WHERE email = $2
-    RETURNING ufname, urespasstokenexp`
+      UPDATE susers 
+      SET uResPassToken = $1, urespasstokenexp = $3
+      WHERE email = $2
+      RETURNING ufname, urespasstokenexp
+    `
     , [token, email, tokenExp])
     .then((result) => {
+      if (result.rowCount === 0) {
+        res.status(404).json({ message: 'There is no account with the provided email.'})
+      }
       // User Exists; Send email with link
       const transporter = nodemailer.createTransport({
         service: 'gmail',
@@ -463,6 +467,49 @@ app.post('/forgotPassword', async (req, res) => {
         html: `Hello ${result.rows[0].ufname}, <br /> <p>Please click this <a href="http://localhost:3001/resetPassword/?token=${token}&email=${email}&exp=${result.rows[0].urespasstokenexp}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
       };
       transporter.sendMail(mailOptions);
+
+      res.status(200).json({message: `An email was sent to ${email}`})
+    })
+    .catch((error) => {
+      console.error(error)
+    })
+})
+
+app.post('/resetPassword', async (req, res) => {
+
+  // If we got here:
+  // 1. User exists
+  // 2. Password is valid
+  // 3. Token has not expired
+
+  // Have to:
+  // 1. Check if token from body === token in DB 
+  // 2. If it does :
+  //    2.1. Grab password from body
+  //    2.2. Update Password in database (salt + hash stuff)
+  //    2.3. Return success
+  // 3. If it doesn't :
+  //    3.1 Return error, instruct user to request new token.
+
+  // Grab data from request body
+  const { email, token, passwrd } = req.body
+
+  // Hash the password using bcrypt
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(passwrd, salt);
+
+  pool.query(`
+    UPDATE susers 
+    SET passwrd = $3
+    WHERE email = $1 AND urespasstoken = $2
+  `, [email, token, hashedPassword])
+    .then((result) => {
+      if (result.rowCount === 0) {
+        res.status(404).json({ message: 'Error resetting password. Please try requesting a new link.'})
+      }
+      else {
+        res.status(200).json({message: 'You have successfully reset your password!'});
+      }
     })
     .catch((error) => {
       console.error(error)
