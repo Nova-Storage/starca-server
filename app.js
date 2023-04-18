@@ -428,7 +428,7 @@ app.get('/get-my-listings', async (req, res) => {
   }
 });
 
-app.post('forgotPassword', async (req, res) => {
+app.post('/forgotPassword', async (req, res) => {
   var randomstring = require("randomstring");
   const { email } = req.body
   var userName = ''
@@ -439,7 +439,7 @@ app.post('forgotPassword', async (req, res) => {
     if (err) {
       console.error(err);
       res.status(500).send('Error querying server.');
-    return;
+      return;
   }
 
   // No user found with the given email
