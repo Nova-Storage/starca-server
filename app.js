@@ -52,12 +52,17 @@ const upload = multer({
    dest: './uploads',
  });
 
+const stripe = require('stripe')(`${process.env.STRIPE_SECRET_KEY}`);
+
 
 
 app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
   res.send('Welcome to Starca Server')
+  const account = await stripe.accounts.create({type: 'express'});
+  account = await stripe.accounts.retrieve('{{CONNECTED_ACCOUNT_ID}}');
+
 });
 
 
@@ -464,7 +469,7 @@ app.post('/forgotPassword', async (req, res) => {
         },
         to: email,
         subject: 'Starca Reset Password',
-        html: `Hello ${result.rows[0].ufname}, <br /> <p>Please click this <a href="http://localhost:3001/resetPassword/?token=${token}&email=${email}&exp=${result.rows[0].urespasstokenexp}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
+        html: `Hello ${result.rows[0].ufname}, <br /> <p>Please click this <a href="${process.env.PAGE_BASE_URL}/resetPassword/?token=${token}&email=${email}&exp=${result.rows[0].urespasstokenexp}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
       };
       transporter.sendMail(mailOptions);
 
