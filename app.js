@@ -20,7 +20,7 @@ dotenv.config({ path:'./.env'});
 
 //cors
 const corsOptions = {
-  origin: '*',
+  origin: ['http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   optionSuccessStatus:200,
 }
@@ -49,10 +49,13 @@ const storage = multer.diskStorage({
 });
 */
 const upload = multer({
-   dest: './uploads',
- });
+  dest: './uploads',
+});
 
-
+const storage = multer.memoryStorage()
+const altUpload = multer({
+  storage: storage
+});
 
 app.use(express.urlencoded({ extended: false }));
 
@@ -280,58 +283,59 @@ app.get('/profile',async(req, res,next) => {
    
 });
   
-app.post('/listing',upload.array("image",5), async (req, res, next) => {
+app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
+
+  let userId;
+  let listid;
+  // Get the user's info from JWT
+  
+  try {
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
+
+  console.log("BUFFER: ", req.files[0].buffer);
 
 
-   
- 
-  const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
-  //const image = req.files;
-  //const userId = req.user.id;
+  /*
+  // Extract listing data from request body
+  const { ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess } = req.body;
  
   try {
+    // Insert new listing in listing table
     const insertListing = await pool.query(
-      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *',
-      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess]
+      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, luserid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *',
+      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, userId]
     );
 
+    // Get the new listing's ID 
     if (insertListing.rows.length > 0) {
-      const lid = insertListing.rows[0].id;
-      console.log(lid);
+      listid = insertListing.rows[0].lid;
+      console.log("lid: ", listid);
     } else {
       console.error('Failed to insert listing');
       res.status(500).json({ message: 'Failed to insert listing' });
     }
-       
-    var response = ''; 
+
+    console.log("req.files", req.files);
+    var response = '';
+    // Loop through images in the request and insert each image into slistimages table
     for(var i=0;i<req.files.length;i++){
         response += `<img src="${req.files[i].path}" /><br>`
-        //console.log(req.files[i].path);
-
-        pool.query('SELECT lid FROM slistings WHERE userid = $1', [userId], (err, result) => {
-  
-          if (err) {
-          console.error(err);
-          res.status(500).send('Not connecting to the server');
-          return;
-        }
-  
-        if (result.rows.length === 0) {
-          res.status(404).send('list not found');
-          return;
-        }
-        let listid = result.rows[0];
         
-      });
-      const listid = 1;
-        pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid,req.files[i].path], function(err, result) {
-          //done();
+        pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid, req.files[i].path], function(err, result) {
+
           if(err) {
-              return console.error('error running query', err);
+              return console.error('error running insert image query', err);
           }
           console.log('Image inserted into the database');
       });
-    }
+    }*/
+    res.status(200).json({ message: 'Successfully created listing' });
 
    // const lid = insertListing.rows[0].id;
   //  console.log(lid);
@@ -350,10 +354,10 @@ app.post('/listing',upload.array("image",5), async (req, res, next) => {
 
     res.status(200).json({message: 'New Listing Created Successfully'}); 
     */
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server Error' });
-  }
+  // } catch (err) {
+  //   console.error(err.message);
+  //   res.status(500).json({ message: 'Server Error' });
+  // }
 });
 
 
