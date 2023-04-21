@@ -54,7 +54,7 @@ const upload = multer({
 
 const stripe = require('stripe')(`${process.env.STRIPE_SECRET_KEY}`);
 
-
+var myUserId = ''
 
 app.use(express.urlencoded({ extended: false }));
 
@@ -78,6 +78,12 @@ app.post('/register', async (req, res) => {
       email: email,
       capabilities: {
         us_bank_account_ach_payments: {
+          requested: true
+        },
+        card_payments: {
+          requested: true
+        },
+        transfers: {
           requested: true
         }
       },
@@ -107,15 +113,15 @@ app.post('/register', async (req, res) => {
       type: 'account_onboarding',
     })
 
-    const accountUpdate = await stripe.accounts.update(
-      account.id,
-      {
-        tos_acceptance: {
-          date: Date.now(),
-          ip: req.socket.remoteAddress
-        }
-      }
-    )
+    // const accountUpdate = await stripe.accounts.update(
+    //   account.id,
+    //   {
+    //     tos_acceptance: {
+    //       date: Date.now(),
+    //       ip: req.socket.remoteAddress
+    //     }
+    //   }
+    // )
 
     try {
   
@@ -199,13 +205,6 @@ app.post('/login', async (req, res) => {
 
         const account = await stripe.accounts.retrieve(stripeId);
         accountInfo = await stripe.accounts.update(stripeId);
-        
-        // Grab stripe account by user's email
-        const accounts = await stripe.accounts.list()
-        const obj = accounts.data.find(acct => acct.email === 'mrachid0531@gmail.com')
-        console.log(console.log(obj))
-
-
 
         // Check if a user with the given email exists
         if (!user) {
@@ -246,16 +245,20 @@ app.post('/login', async (req, res) => {
           type: 'account_onboarding',
         })
 
-        res.status(200).json({
+        res.json({
           message: "You Logged In!",
           stripe_connected: false,
-          stripe_link_url: accountLink['url']
+          stripe_link_url: accountLink['url'], 
         })
       }
         
-      else res.status(200).json({
-        message: "You Logged In!"
-      });
+      else {
+        res.status(200).json({
+        message: "You Logged In!",
+        userID: userId
+      })
+      myUserId = userId
+    };
       
         //res.redirect('/profile');
 
@@ -369,17 +372,19 @@ app.post('/listing',upload.array("image",5), async (req, res, next) => {
   const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
   //const image = req.files;
   //const userId = req.user.id;
+
+  let userId = 18
+  let userStripeId = 'acct_1MzG2pQXM5WjR9f1'
+
  
   try {
     const insertListing = await pool.query(
-      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *',
-      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess]
+      'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, luserid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *',
+      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, 18]
     );
 
     if (insertListing.rows.length > 0) {
       const lid = insertListing.rows[0].lid;
-      console.log(lid);
-      console.log(typeof(lprice))
 
       let temp = lprice * 100
 
@@ -398,10 +403,10 @@ app.post('/listing',upload.array("image",5), async (req, res, next) => {
             interval: 'month'
           },
         }
-      })
+      },
+      {stripeAccount: userStripeId})
 
-      const getProducts = await stripe.products.retrieve(`${lid}`)
-
+      const getProducts = await stripe.products.retrieve(`${lid}`, {stripeAccount: userStripeId})
       console.log(getProducts['default_price'])
 
     } else {
@@ -624,8 +629,8 @@ app.post('/resetPassword', async (req, res) => {
 
 app.post('/create-checkout-session', async (req, res) => {
 
-  const { lid, ownerEmail, renterEmail } = req.body
-  pool.query(`SELECT ustripeid from susers where email = $1 or email = $2`, [ownerEmail, renterEmail])
+  const { lid, ownerID, renterID } = req.body
+  pool.query(`SELECT ustripeid, email from susers where id = $1 or id = $2`, [ownerID, renterID])
   .then(async (result) => {
     if (result.rowCount === 0) {
       res.status(404).json({ message: 'Error retrieving Owner\'s ID.'})
@@ -633,27 +638,44 @@ app.post('/create-checkout-session', async (req, res) => {
     else {
 
       let ownerStripeId = result.rows[0].ustripeid
+      // let ownerStripeId = "acct_1MzG2pQXM5WjR9f1"
+      let ownerEmail = result.rows[0].email
       let renterStripeId = result.rows[1].ustripeid
+      // let renterStripeId = "acct_1MzGIdH8iLYs43p6"
+      let renterEmail = result.rows[1].email
 
-      const product = await stripe.products.retrieve(`${lid}`)
-      const getPrice = await stripe.prices.retrieve(product['default_price'])
-      const price = getPrice['unit_amount'] * 0.08
-    
+
+      const product = await stripe.products.retrieve(`${lid}`, {stripeAccount: ownerStripeId})
+      // console.log(product)
+      console.log(typeof(product['default_price']))
+      const getPrice = await stripe.prices.retrieve(product['default_price'], {stripeAccount: ownerStripeId})
+
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
         line_items: [{
-          price: product['default_price'],
+          price: `${product['default_price']}`,
           quantity: 1
         }],
-        // customer: ,
-        setup_intent_data: {
-
+        customer_email: renterEmail,
+        subscription_data: {
+          application_fee_percent: 0.08,
+          metadata: {
+            listingId: lid,
+            ownerId: ownerID,
+            ownerStripeId: ownerStripeId
+          },
         },
-        // payment_intent_data: {application_fee_amount: 123},
         success_url: 'http://localhost:3001/login',
         cancel_url: 'http://localhost:3001/register',
-      })
+      },
+      {stripeAccount: `${ownerStripeId}`})
 
+
+      if (session.complete) {
+        console.log('DONE')
+      }
+
+      // console.log(session.url)
       res.status(200).json({message: "Checkout Link Created", checkout_link: `${session.url}`})
     }
   })
