@@ -12,8 +12,9 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const { promisify } = require("util");
 const cors = require('cors');
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const crypto  = require('crypto');
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 dotenv.config({ path:'./.env'});
 
 const bucketName=process.env.BUCKET_NAME;
@@ -413,20 +414,51 @@ app.get('/glisting', async (req, res) => {
   }
 });
 
+
 app.get('/get-listings', async (req, res) => {
 
   try {
+    // Get all listings along with their corresponding images
     const query = `
-      SELECT *
+      SELECT slistings.*, ARRAY_AGG(slistimages.imageName) imageids
       FROM slistings
+      LEFT JOIN slistimages ON slistings.lid = slistimages.listid
+      GROUP BY slistings.lid, slistimages.listid
     `;
 
     const result = await pool.query(query);
+    console.log(result.rows);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'No listings found' });
     }
 
+    // Loop through all listings to create url's for each image
+    for (const listing of result.rows) {
+      // Check if listing has any images
+      if (listing.imageids[0] == null) {
+        console.log("Skipping");
+        continue;
+      }
+
+      for (var i = 0; i < listing.imageids.length; i++){
+        const getObjectParams = {
+          Bucket: bucketName,
+          Key: listing.imageids[i]
+        }
+        // Create image url from S3 bucket
+        const command = new GetObjectCommand(getObjectParams);
+        const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+        // Append image url(s) to listing object
+        if (listing.imageUrls){
+          listing.imageUrls.push(url);
+        } else {
+          listing.imageUrls = [url];
+        }
+      }
+    }
+    
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err.message);
