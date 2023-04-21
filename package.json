@@ -6,6 +6,8 @@
     "start": "node ./bin/www"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.317.0",
+    "@aws-sdk/s3-request-presigner": "^3.317.0",
     "bcrypt": "^5.1.0",
     "body-parser": "^1.20.2",
     "cookie-parser": "~1.4.4",
