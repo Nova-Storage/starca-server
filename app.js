@@ -373,10 +373,78 @@ app.get('/logout',(req, res) => {
   });
 
 
-app.get('/profile',async(req, res,next) => {
-   
-});
+app.get('/get-profile',async(req, res,next) => {
   
+  let userId;
+  // Get the user's info from JWT
+  try {
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
+
+  pool.query('SELECT email, ufname, ulname, uphnum, ubio, ustreet, ucity, ustate, uzip FROM susers WHERE id = $1', [userId], (err, result) => {
+ 
+    console.log(result);
+      if (err) {
+      console.error(err);
+      res.status(500).send('Not connecting to the server');
+      return;
+    }
+  
+    if (result.rows.length === 0) {
+      // No user found with the given email
+      res.status(404).send('User not found');
+      return;
+    }
+  
+    // Render the profile page with the user data
+    res.status(200).json(result.rows[0]);
+  });
+});
+
+app.post('/update-profile',async(req, res,next) => {
+  
+  let userId;
+  // Get the user's info from JWT
+  try {
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
+
+  console.log("REQ.BODY", req.body);
+
+  const { ufname, ulname, uphnum, ubio, ustreet, ucity, ustate, uzip } = req.body;
+  
+  pool.query('UPDATE susers SET ufname = $1, ulname = $2, uphnum = $3, ubio = $4, ustreet = $5, ucity = $6, ustate = $7, uzip = $8  WHERE id = $9 RETURNING ufname,ulname,uphnum,ubio,ustreet,ucity,ustate,uzip', 
+            [ufname, ulname, uphnum, ubio, ustreet, ucity, ustate, uzip, userId], (err, result) => {
+ 
+    console.log(result);
+      if (err) {
+      console.error(err);
+      res.status(500).send('Not connecting to the server');
+      return;
+    }
+  
+    if (result.rows.length === 0) {
+      // No user found with the given email
+      res.status(404).send('User not found');
+      return;
+    }
+  
+    // Render the profile page with the user data
+    res.status(200).json(result.rows[0]);
+  });
+});
+
+
 app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
 
   let userId;
@@ -540,6 +608,7 @@ app.get('/get-listings', async (req, res) => {
     console.log(result.rows);
 
     if (result.rowCount === 0) {
+      console.log("WHOA");
       return res.status(404).json({ message: 'No listings found' });
     }
 
