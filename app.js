@@ -10,17 +10,32 @@ const path = require("path");
 const dotenv = require("dotenv");
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
-const {promisify} = require("util");
-const cors =require('cors');
-
+const { promisify } = require("util");
+const cors = require('cors');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const crypto  = require('crypto');
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 dotenv.config({ path:'./.env'});
+
+const bucketName=process.env.BUCKET_NAME;
+const bucketRegion=process.env.BUCKET_REGION;
+const accessKey=process.env.ACCESS_KEY;
+const secretAccessKey=process.env.SECRET_ACCESS_KEY;
+
+const s3 = new S3Client({
+  credentials: {
+    accessKeyId: accessKey,
+    secretAccessKey: secretAccessKey
+  },
+  region: bucketRegion
+});
 
 //Middleware
 // parse incoming requests
 
 //cors
 const corsOptions = {
-  origin: '*',
+  origin: ['http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   optionSuccessStatus:200,
 }
@@ -49,8 +64,13 @@ const storage = multer.diskStorage({
 });
 */
 const upload = multer({
-   dest: './uploads',
- });
+  dest: './uploads',
+});
+
+const storage = multer.memoryStorage()
+const altUpload = multer({
+  storage: storage
+});
 
 const stripe = require('stripe')(`${process.env.STRIPE_SECRET_KEY}`);
 
@@ -110,16 +130,6 @@ app.post('/register', async (req, res) => {
       return_url: 'http://localhost:3001/login',
       type: 'account_onboarding',
     })
-
-    // const accountUpdate = await stripe.accounts.update(
-    //   account.id,
-    //   {
-    //     tos_acceptance: {
-    //       date: Date.now(),
-    //       ip: req.socket.remoteAddress
-    //     }
-    //   }
-    // )
 
     try {
   
@@ -365,23 +375,36 @@ app.get('/profile',async(req, res,next) => {
    
 });
   
-app.post('/listing',upload.array("image",5), async (req, res, next) => {
+app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
 
-  const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
-  //const image = req.files;
-  //const userId = req.user.id;
+  let userId;
+  let listid;
 
-  let userId = 18
-  let userStripeId = 'acct_1MzG2pQXM5WjR9f1'
+  const randomImageNameGenerator = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
+  // Get the user's info from JWT
+  try {
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
+  
+  // Extract listing data from request body
+  const { ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess } = req.body;
  
   try {
+    // Insert new listing in listing table
     const insertListing = await pool.query(
       'INSERT INTO slistings(ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, luserid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *',
-      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, 18]
+      [ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess, userId]
     );
 
+    // Get the new listing's ID 
     if (insertListing.rows.length > 0) {
+
       const lid = insertListing.rows[0].lid;
 
       let temp = lprice * 100
@@ -407,40 +430,43 @@ app.post('/listing',upload.array("image",5), async (req, res, next) => {
       const getProducts = await stripe.products.retrieve(`${lid}`, {stripeAccount: userStripeId})
       console.log(getProducts['default_price'])
 
+      listid = insertListing.rows[0].lid;
+      console.log("lid: ", listid);
     } else {
       console.error('Failed to insert listing');
       res.status(500).json({ message: 'Failed to insert listing' });
     }
-       
-    var response = ''; 
-    // for(var i=0;i<req.files.length;i++){
-    //     response += `<img src="${req.files[i].path}" /><br>`
-    //     //console.log(req.files[i].path);
 
-    //     pool.query('SELECT lid FROM slistings WHERE userid = $1', [userId], (err, result) => {
-  
-    //       if (err) {
-    //       console.error(err);
-    //       res.status(500).send('Not connecting to the server');
-    //       return;
-    //     }
-  
-    //     if (result.rows.length === 0) {
-    //       res.status(404).send('list not found');
-    //       return;
-    //     }
-    //     let listid = result.rows[0];
+    console.log("req.files", req.files);
+    var response = '';
+    // Loop through images in the request and insert each image into slistimages table
+    for(var i=0;i<req.files.length;i++){
+        response += `<img src="${req.files[i].originalname}" /><br>`
+
+        // Generate random image name
+        const imageName = randomImageNameGenerator();
+
+        // Set up s3 PutObjectCommand params
+        const s3Params = {
+          Bucket: bucketName,
+          Key: imageName, 
+          Body: req.files[i].buffer,
+          ContentType: req.files[i].mimetype
+        }
+
+        // Send file to s3 bucket
+        const command = new PutObjectCommand(s3Params)
+        await s3.send(command);
         
-    //   });
-    //   const listid = 1;
-    //     pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid,req.files[i].path], function(err, result) {
-    //       //done();
-    //       if(err) {
-    //           return console.error('error running query', err);
-    //       }
-    //       console.log('Image inserted into the database');
-    //   });
-    // }
+        pool.query('INSERT INTO slistImages (listid, imageName) VALUES ($1,$2)', [listid, imageName], function(err, result) {
+
+          if(err) {
+              return console.error('error running insert image query', err);
+          }
+          console.log('Image inserted into the database');
+      });
+    }
+    res.status(200).json({ message: 'Successfully created listing' });
 
    // const lid = insertListing.rows[0].id;
   //  console.log(lid);
@@ -491,20 +517,51 @@ app.get('/glisting', async (req, res) => {
   }
 });
 
+
 app.get('/get-listings', async (req, res) => {
 
   try {
+    // Get all listings along with their corresponding images
     const query = `
-      SELECT *
+      SELECT slistings.*, ARRAY_AGG(slistimages.imageName) imageids
       FROM slistings
+      LEFT JOIN slistimages ON slistings.lid = slistimages.listid
+      GROUP BY slistings.lid, slistimages.listid
     `;
 
     const result = await pool.query(query);
+    console.log(result.rows);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'No listings found' });
     }
 
+    // Loop through all listings to create url's for each image
+    for (const listing of result.rows) {
+      // Check if listing has any images
+      if (listing.imageids[0] == null) {
+        console.log("Skipping");
+        continue;
+      }
+
+      for (var i = 0; i < listing.imageids.length; i++){
+        const getObjectParams = {
+          Bucket: bucketName,
+          Key: listing.imageids[i]
+        }
+        // Create image url from S3 bucket
+        const command = new GetObjectCommand(getObjectParams);
+        const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+        // Append image url(s) to listing object
+        if (listing.imageUrls){
+          listing.imageUrls.push(url);
+        } else {
+          listing.imageUrls = [url];
+        }
+      }
+    }
+    
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err.message);
