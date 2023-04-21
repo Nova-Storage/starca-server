@@ -35,7 +35,7 @@ const s3 = new S3Client({
 
 //cors
 const corsOptions = {
-  origin: ['http://localhost:3001', 'http://localhost:3000'],
+  origin: ['http://localhost:3001', 'http://localhost:3000', 'https://starcastorage.com'],
   credentials: true,
   optionSuccessStatus:200,
 }
