@@ -89,6 +89,7 @@ app.post('/register', async (req, res) => {
 
     const { email, passwrd, confirmPassword, ufname, ulname, uphnum, ustreet, ucity, ustate, uzip } = req.body;
 
+    // Create Stripe Connected Account
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'US',
@@ -124,6 +125,7 @@ app.post('/register', async (req, res) => {
       }
     });
 
+    // Generate URL via Stripe API for users to complete their account setup
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
       refresh_url: 'http://localhost:3001/login',
@@ -405,32 +407,37 @@ app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
     // Get the new listing's ID 
     if (insertListing.rows.length > 0) {
 
-      const lid = insertListing.rows[0].lid;
-
-      let temp = lprice * 100
-
-      // Create product for the listing on Stripe. Using the listingID as the productID
-      const product = await stripe.products.create({
-        id: lid,
-        name: `${ltitle} Storage`,
-        description: `${ltitle} Storage in ${lcity}, ${lstate} ${lzip}`,
-        metadata: {
-          "listing_address": `${lstreet}, ${lcity}, ${lstate} ${lzip}`
-        },
-        default_price_data: {
-          currency: "USD",
-          unit_amount: temp,
-          recurring: {
-            interval: 'month'
-          },
-        }
-      },
-      {stripeAccount: userStripeId})
-
-      const getProducts = await stripe.products.retrieve(`${lid}`, {stripeAccount: userStripeId})
-      console.log(getProducts['default_price'])
-
       listid = insertListing.rows[0].lid;
+
+      let userStripeIdQuery = await pool.query(`SELECT ustripeid from susers where id = $1`,[userId])
+
+      if (userStripeIdQuery.rowCount === 0) {
+        res.status(500).json("Error creating Product on Stripe. Please Try Again.")
+      }
+      
+      else {
+        let stripePrice = lprice * 100
+        let userStripeId = userStripeIdQuery.rows[0].ustripeid
+        // Create product for the listing on Stripe. Using the listingID as the productID
+        const product = await stripe.products.create({
+          id: listid,
+          name: `${ltitle} Storage`,
+          description: `${ltitle} Storage in ${lcity}, ${lstate} ${lzip}`,
+          metadata: {
+            "listing_address": `${lstreet}, ${lcity}, ${lstate} ${lzip}`
+          },
+          default_price_data: {
+            currency: "USD",
+            unit_amount: stripePrice,
+            recurring: {
+              interval: 'month'
+            },
+          }
+        }, {stripeAccount: userStripeId})
+    }
+
+      // const getProducts = await stripe.products.retrieve(`${lid}`, {stripeAccount: userStripeId})
+      // console.log(getProducts['default_price'])
       console.log("lid: ", listid);
     } else {
       console.error('Failed to insert listing');
@@ -720,8 +727,8 @@ app.post('/create-checkout-session', async (req, res) => {
             ownerStripeId: ownerStripeId
           },
         },
-        success_url: 'http://localhost:3001/login',
-        cancel_url: 'http://localhost:3001/register',
+        success_url: 'http://localhost:3001/dashboard',
+        cancel_url: 'http://localhost:3001/login',
       },
       {stripeAccount: `${ownerStripeId}`})
 
