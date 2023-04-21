@@ -54,8 +54,6 @@ const upload = multer({
 
 const stripe = require('stripe')(`${process.env.STRIPE_SECRET_KEY}`);
 
-var myUserId = ''
-
 app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
