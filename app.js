@@ -10,10 +10,24 @@ const path = require("path");
 const dotenv = require("dotenv");
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
-const {promisify} = require("util");
-const cors =require('cors');
-
+const { promisify } = require("util");
+const cors = require('cors');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const crypto  = require('crypto');
 dotenv.config({ path:'./.env'});
+
+const bucketName=process.env.BUCKET_NAME;
+const bucketRegion=process.env.BUCKET_REGION;
+const accessKey=process.env.ACCESS_KEY;
+const secretAccessKey=process.env.SECRET_ACCESS_KEY;
+
+const s3 = new S3Client({
+  credentials: {
+    accessKeyId: accessKey,
+    secretAccessKey: secretAccessKey
+  },
+  region: bucketRegion
+});
 
 //Middleware
 // parse incoming requests
@@ -287,8 +301,10 @@ app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
 
   let userId;
   let listid;
+
+  const randomImageNameGenerator = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
+
   // Get the user's info from JWT
-  
   try {
     const token = req.cookies.jwt;
     const user  = jwt.verify(token, process.env.JWT_SECRET);
@@ -297,11 +313,7 @@ app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
     console.log(err);
     res.status(403).json({ message: "Authorization error. Invalid token"})
   }
-
-  console.log("BUFFER: ", req.files[0].buffer);
-
-
-  /*
+  
   // Extract listing data from request body
   const { ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess } = req.body;
  
@@ -325,16 +337,31 @@ app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
     var response = '';
     // Loop through images in the request and insert each image into slistimages table
     for(var i=0;i<req.files.length;i++){
-        response += `<img src="${req.files[i].path}" /><br>`
+        response += `<img src="${req.files[i].originalname}" /><br>`
+
+        // Generate random image name
+        const imageName = randomImageNameGenerator();
+
+        // Set up s3 PutObjectCommand params
+        const s3Params = {
+          Bucket: bucketName,
+          Key: imageName, 
+          Body: req.files[i].buffer,
+          ContentType: req.files[i].mimetype
+        }
+
+        // Send file to s3 bucket
+        const command = new PutObjectCommand(s3Params)
+        await s3.send(command);
         
-        pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid, req.files[i].path], function(err, result) {
+        pool.query('INSERT INTO slistImages (listid, imageName) VALUES ($1,$2)', [listid, imageName], function(err, result) {
 
           if(err) {
               return console.error('error running insert image query', err);
           }
           console.log('Image inserted into the database');
       });
-    }*/
+    }
     res.status(200).json({ message: 'Successfully created listing' });
 
    // const lid = insertListing.rows[0].id;
@@ -354,10 +381,10 @@ app.post('/listing', altUpload.array("files", 5), async (req, res, next) => {
 
     res.status(200).json({message: 'New Listing Created Successfully'}); 
     */
-  // } catch (err) {
-  //   console.error(err.message);
-  //   res.status(500).json({ message: 'Server Error' });
-  // }
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error' });
+  }
 });
 
 
