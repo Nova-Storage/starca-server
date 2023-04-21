@@ -71,6 +71,52 @@ app.post('/register', async (req, res) => {
 
     const { email, passwrd, confirmPassword, ufname, ulname, uphnum, ustreet, ucity, ustate, uzip } = req.body;
 
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'US',
+      business_type: 'individual',
+      email: email,
+      capabilities: {
+        us_bank_account_ach_payments: {
+          requested: true
+        }
+      },
+      individual: {
+        first_name: ufname,
+        last_name: ulname,
+        phone: uphnum,
+        address: {
+          city: ucity,
+          country: 'US',
+          line1: ustreet,
+          postal_code: uzip,
+          state: ustate
+        }
+      },
+      business_profile: {
+        product_description: "Storage Space Rentals",
+        name: `${ufname} ${ulname}`,
+        mcc: '4225'
+      }
+    });
+
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: 'http://localhost:3001/login',
+      return_url: 'http://localhost:3001/login',
+      type: 'account_onboarding',
+    })
+
+    const accountUpdate = await stripe.accounts.update(
+      account.id,
+      {
+        tos_acceptance: {
+          date: Date.now(),
+          ip: req.socket.remoteAddress
+        }
+      }
+    )
+
     try {
   
         if (!email || !passwrd || !confirmPassword || !ufname || !ulname || !uphnum || !ustreet || !ucity || !ustate || !uzip) {
@@ -93,11 +139,14 @@ app.post('/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(passwrd, salt);
 
         // Insert the user into the database
-        const insertQuery = 'INSERT INTO susers(email, passwrd, ufname, ulname, uphnum,  ustreet, ucity, ustate, uzip) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id';
-        const values = [email, hashedPassword, ufname, ulname, uphnum,  ustreet, ucity, ustate, uzip];
+        const insertQuery = 'INSERT INTO susers(email, passwrd, ufname, ulname, uphnum,  ustreet, ucity, ustate, uzip, ustripeid) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id';
+        const values = [email, hashedPassword, ufname, ulname, uphnum,  ustreet, ucity, ustate, uzip, account.id];
         const insertUserResult = await pool.query(insertQuery, values);
         
-        res.status(201).send('You have successfully registered!');
+        res.status(201).json({
+          message: 'You have successfully registered!',
+          account_link_url: accountLink['url']
+        });
         
           
           // Send email notification
@@ -131,6 +180,8 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
 
     const { email, passwrd } = req.body;
+
+
     
     try {
   
@@ -143,7 +194,17 @@ app.post('/login', async (req, res) => {
         const result = await pool.query(query, [email]);
         const user = result.rows[0];
         let userId = user.id;
+        let stripeId = user.ustripeid
         req.session.userId = userId;
+
+        const account = await stripe.accounts.retrieve(stripeId);
+        accountInfo = await stripe.accounts.update(stripeId);
+        
+        // Grab stripe account by user's email
+        const accounts = await stripe.accounts.list()
+        const obj = accounts.data.find(acct => acct.email === 'mrachid0531@gmail.com')
+        console.log(console.log(obj))
+
 
 
         // Check if a user with the given email exists
@@ -176,7 +237,25 @@ app.post('/login', async (req, res) => {
       } 
 
 
-        res.send("You Logged in.!");
+      if (account["charges_enabled"] === false) {
+        
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: 'http://localhost:3001/login',
+          return_url: 'http://localhost:3001/login',
+          type: 'account_onboarding',
+        })
+
+        res.status(200).json({
+          message: "You Logged In!",
+          stripe_connected: false,
+          stripe_link_url: accountLink['url']
+        })
+      }
+        
+      else res.status(200).json({
+        message: "You Logged In!"
+      });
       
         //res.redirect('/profile');
 
@@ -287,9 +366,6 @@ app.get('/profile',async(req, res,next) => {
   
 app.post('/listing',upload.array("image",5), async (req, res, next) => {
 
-
-   
- 
   const{ltitle, ldescr, llen, lwid, lheight, lprice, lstreet,lcity, lstate, lzip, lcountry,lseccamara, lclicontroll, lbiometric, lwhaccess} = req.body;
   //const image = req.files;
   //const userId = req.user.id;
@@ -301,42 +377,67 @@ app.post('/listing',upload.array("image",5), async (req, res, next) => {
     );
 
     if (insertListing.rows.length > 0) {
-      const lid = insertListing.rows[0].id;
+      const lid = insertListing.rows[0].lid;
       console.log(lid);
+      console.log(typeof(lprice))
+
+      let temp = lprice * 100
+
+      // Create product for the listing on Stripe. Using the listingID as the productID
+      const product = await stripe.products.create({
+        id: lid,
+        name: `${ltitle} Storage`,
+        description: `${ltitle} Storage in ${lcity}, ${lstate} ${lzip}`,
+        metadata: {
+          "listing_address": `${lstreet}, ${lcity}, ${lstate} ${lzip}`
+        },
+        default_price_data: {
+          currency: "USD",
+          unit_amount: temp,
+          recurring: {
+            interval: 'month'
+          },
+        }
+      })
+
+      const getProducts = await stripe.products.retrieve(`${lid}`)
+
+      console.log(getProducts['default_price'])
+
     } else {
       console.error('Failed to insert listing');
       res.status(500).json({ message: 'Failed to insert listing' });
     }
        
     var response = ''; 
-    for(var i=0;i<req.files.length;i++){
-        response += `<img src="${req.files[i].path}" /><br>`
-        //console.log(req.files[i].path);
+    // for(var i=0;i<req.files.length;i++){
+    //     response += `<img src="${req.files[i].path}" /><br>`
+    //     //console.log(req.files[i].path);
 
-        pool.query('SELECT lid FROM slistings WHERE userid = $1', [userId], (err, result) => {
+    //     pool.query('SELECT lid FROM slistings WHERE userid = $1', [userId], (err, result) => {
   
-          if (err) {
-          console.error(err);
-          res.status(500).send('Not connecting to the server');
-          return;
-        }
+    //       if (err) {
+    //       console.error(err);
+    //       res.status(500).send('Not connecting to the server');
+    //       return;
+    //     }
   
-        if (result.rows.length === 0) {
-          res.status(404).send('list not found');
-          return;
-        }
-        let listid = result.rows[0];
+    //     if (result.rows.length === 0) {
+    //       res.status(404).send('list not found');
+    //       return;
+    //     }
+    //     let listid = result.rows[0];
         
-      });
-      const listid = 1;
-        pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid,req.files[i].path], function(err, result) {
-          //done();
-          if(err) {
-              return console.error('error running query', err);
-          }
-          console.log('Image inserted into the database');
-      });
-    }
+    //   });
+    //   const listid = 1;
+    //     pool.query('INSERT INTO slistImages (listid, image_path) VALUES ($1,$2)', [listid,req.files[i].path], function(err, result) {
+    //       //done();
+    //       if(err) {
+    //           return console.error('error running query', err);
+    //       }
+    //       console.log('Image inserted into the database');
+    //   });
+    // }
 
    // const lid = insertListing.rows[0].id;
   //  console.log(lid);
@@ -521,5 +622,44 @@ app.post('/resetPassword', async (req, res) => {
     })
 })
 
+app.post('/create-checkout-session', async (req, res) => {
+
+  const { lid, ownerEmail, renterEmail } = req.body
+  pool.query(`SELECT ustripeid from susers where email = $1 or email = $2`, [ownerEmail, renterEmail])
+  .then(async (result) => {
+    if (result.rowCount === 0) {
+      res.status(404).json({ message: 'Error retrieving Owner\'s ID.'})
+    }
+    else {
+
+      let ownerStripeId = result.rows[0].ustripeid
+      let renterStripeId = result.rows[1].ustripeid
+
+      const product = await stripe.products.retrieve(`${lid}`)
+      const getPrice = await stripe.prices.retrieve(product['default_price'])
+      const price = getPrice['unit_amount'] * 0.08
+    
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        line_items: [{
+          price: product['default_price'],
+          quantity: 1
+        }],
+        // customer: ,
+        setup_intent_data: {
+
+        },
+        // payment_intent_data: {application_fee_amount: 123},
+        success_url: 'http://localhost:3001/login',
+        cancel_url: 'http://localhost:3001/register',
+      })
+
+      res.status(200).json({message: "Checkout Link Created", checkout_link: `${session.url}`})
+    }
+  })
+  .catch((error) => {
+    console.error(error)
+  })
+})
   
 module.exports = app;
