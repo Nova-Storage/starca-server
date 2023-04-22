@@ -82,9 +82,6 @@ app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
   res.send('Welcome to Starca Server')
-  const account = await stripe.accounts.create({type: 'express'});
-  account = await stripe.accounts.retrieve('{{CONNECTED_ACCOUNT_ID}}');
-
 });
 
 
@@ -150,7 +147,7 @@ app.post('/register', async (req, res) => {
           // Check if the user already exists
         const existingUser = await pool.query('SELECT * FROM susers WHERE email=$1', [email]);
         if (existingUser.rows.length !== 0) {
-        res.status(400).send('User already exists');
+        res.status(400).json({message: 'User already exists'});
         return;
         }
 
@@ -165,7 +162,8 @@ app.post('/register', async (req, res) => {
         
         res.status(201).json({
           message: 'You have successfully registered!',
-          account_link_url: accountLink['url']
+          account_link_url: accountLink['url'],
+          userId: insertUserResult.rows[0].id
         });
         
           
@@ -710,7 +708,7 @@ app.post('/forgotPassword', async (req, res) => {
         },
         to: email,
         subject: 'Starca Reset Password',
-        html: `Hello ${result.rows[0].ufname}, <br /> <p>Please click this <a href="${process.env.PAGE_BASE_URL}/resetPassword/?token=${token}&email=${email}&exp=${result.rows[0].urespasstokenexp}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
+        html: `Hello ${result.rows[0].ufname}, <br /> <p>Please click this <a href="https://starcastorage.com/resetPassword/?token=${token}&email=${email}&exp=${result.rows[0].urespasstokenexp}">link</a> to reset your password. The link will expire in 1 hour.</p>`,
       };
       transporter.sendMail(mailOptions);
 
