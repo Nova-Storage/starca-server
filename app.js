@@ -82,9 +82,6 @@ app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
   res.send('Welcome to Starca Server')
-  const account = await stripe.accounts.create({type: 'express'});
-  account = await stripe.accounts.retrieve('{{CONNECTED_ACCOUNT_ID}}');
-
 });
 
 
