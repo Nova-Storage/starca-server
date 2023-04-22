@@ -132,8 +132,8 @@ app.post('/register', async (req, res) => {
     // Generate URL via Stripe API for users to complete their account setup
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: 'http://localhost:3001/login',
-      return_url: 'http://localhost:3001/login',
+      refresh_url: 'https://starcastorage.com/login',
+      return_url: 'https://starcastorage.com/login',
       type: 'account_onboarding',
     })
 
@@ -254,8 +254,8 @@ app.post('/login', async (req, res) => {
         
         const accountLink = await stripe.accountLinks.create({
           account: account.id,
-          refresh_url: 'http://localhost:3001/login',
-          return_url: 'http://localhost:3001/login',
+          refresh_url: 'https://starcastorage.com/login',
+          return_url: 'https://starcastorage.com/login',
           type: 'account_onboarding',
         })
 
@@ -800,8 +800,8 @@ app.post('/create-checkout-session', async (req, res) => {
             ownerStripeId: ownerStripeId
           },
         },
-        success_url: 'http://localhost:3001/dashboard',
-        cancel_url: 'http://localhost:3001/login',
+        success_url: 'https://starcastorage.com/dashboard',
+        cancel_url: 'https://starcastorage.com/login',
       },
       {stripeAccount: `${ownerStripeId}`})
 
