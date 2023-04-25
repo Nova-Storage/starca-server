@@ -654,29 +654,70 @@ app.get('/get-listings', async (req, res) => {
 });
 
 app.get('/get-my-listings', async (req, res) => {
-  const id = req.params.id;
+  
+  let userId;
+  // Get the user's info from JWT
+  try {
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
 
   try {
+    // Get all listings that correspond to current user along with their respective images
     const query = `
-      SELECT *
+      SELECT slistings.*, ARRAY_AGG(slistimages.imageName) imageids
       FROM slistings
-      WHERE luserid = $1
+      LEFT JOIN slistimages ON slistings.lid = slistimages.listid
+      WHERE slistings.luserid = $1
+      GROUP BY slistings.lid, slistimages.listid
     `;
 
-    values = [id];
+    const values = [userId]
 
     const result = await pool.query(query, values);
+    console.log(result.rows);
 
     if (result.rowCount === 0) {
+      console.log("WHOA");
       return res.status(404).json({ message: 'No listings found' });
     }
 
+    // Loop through each listing to create url's for the images
+    for (const listing of result.rows) {
+      // Check if listing has any images
+      if (listing.imageids[0] == null) {
+        continue;
+      }
+
+      for (var i = 0; i < listing.imageids.length; i++){
+        const getObjectParams = {
+          Bucket: bucketName,
+          Key: listing.imageids[i]
+        }
+        // Create image url from S3 bucket
+        const command = new GetObjectCommand(getObjectParams);
+        const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+        // Append image url(s) to listing object
+        if (listing.imageUrls){
+          listing.imageUrls.push(url);
+        } else {
+          listing.imageUrls = [url];
+        }
+      }
+    }
+    
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error' });
   }
 });
+
 
 app.post('/forgotPassword', async (req, res) => {
   var randomstring = require("randomstring");
