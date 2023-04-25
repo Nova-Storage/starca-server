@@ -423,10 +423,16 @@ app.post('/update-profile',async(req, res,next) => {
 
   console.log("REQ.BODY", req.body);
 
-  const { ufname, ulname, uphnum, ubio, ustreet, ucity, ustate, uzip } = req.body;
+  const { ufname, ulname, passwrd, uphnum, ubio, ustreet, ucity, ustate, uzip } = req.body;
   
-  pool.query('UPDATE susers SET ufname = $1, ulname = $2, uphnum = $3, ubio = $4, ustreet = $5, ucity = $6, ustate = $7, uzip = $8  WHERE id = $9 RETURNING ufname,ulname,uphnum,ubio,ustreet,ucity,ustate,uzip', 
-            [ufname, ulname, uphnum, ubio, ustreet, ucity, ustate, uzip, userId], (err, result) => {
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(passwrd, salt);
+
+  console.log(passwrd)
+  console.log(hashedPassword)
+
+  pool.query('UPDATE susers SET ufname = $1, ulname = $2, passwrd = $3, uphnum = $4, ubio = $5, ustreet = $6, ucity = $7, ustate = $8, uzip = $9  WHERE id = $10 RETURNING ufname,ulname,uphnum,ubio,ustreet,ucity,ustate,uzip', 
+            [ufname, ulname, hashedPassword, uphnum, ubio, ustreet, ucity, ustate, uzip, userId], (err, result) => {
  
     console.log(result);
       if (err) {
