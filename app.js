@@ -81,7 +81,7 @@ const stripe = require('stripe')(`${process.env.STRIPE_SECRET_KEY}`);
 app.use(express.urlencoded({ extended: false }));
 
 app.get('/', async (req, res) => {
-  res.send('Welcome to Starca Server')
+  res.send('Welcome to Starca Server');
 });
 
 
@@ -371,7 +371,7 @@ app.get('/logout',(req, res) => {
       httpOnly: true
     });
 
-    res.status(200).redirect("/");
+    res.status(200);
   });
 
 
@@ -603,17 +603,31 @@ app.get('/glisting', async (req, res) => {
 
 app.get('/get-listings', async (req, res) => {
 
+  let userId;
+  // Get the user's info from JWT
   try {
-    // Get all listings along with their corresponding images
+    const token = req.cookies.jwt;
+    const user  = jwt.verify(token, process.env.JWT_SECRET);
+    userId = user.userId;
+    console.log("USER ID HERE", userId);
+  } catch (err) {
+    console.log(err);
+    res.status(403).json({ message: "Authorization error. Invalid token"})
+  }
+
+  try {
+    // Get all listings (except those belonging to currently signed-in user) along with their corresponding images
     const query = `
       SELECT slistings.*, ARRAY_AGG(slistimages.imageName) imageids
       FROM slistings
       LEFT JOIN slistimages ON slistings.lid = slistimages.listid
+      WHERE slistings.luserid != $1
       GROUP BY slistings.lid, slistimages.listid
     `;
 
-    const result = await pool.query(query);
-    console.log(result.rows);
+    const values = [userId];
+
+    const result = await pool.query(query, values);
 
     if (result.rowCount === 0) {
       console.log("WHOA");
@@ -624,7 +638,6 @@ app.get('/get-listings', async (req, res) => {
     for (const listing of result.rows) {
       // Check if listing has any images
       if (listing.imageids[0] == null) {
-        console.log("Skipping");
         continue;
       }
 
